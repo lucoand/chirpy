@@ -6,6 +6,8 @@ boot.dev webserver project written in Go.
 
 Chirpy is a backend server API developed and tested on Linux that mimics some of the basic functionality of Twitter/X.  It uses postgreSQL for its database.
 
+This is effecitvely a toy application and is not intended for a serious use.  It does not currently support any real security.
+
 It supports a variety of http requests with a variety of endpoints.  Users can sign up, log in and recieve access and refresh tokens, make posts (Chrips!), delete their own Chirps, and view all of the Chirps posted by all users, or just a single user.
 
 ## Requirements
@@ -143,6 +145,8 @@ To start the server, run `./chirpy` in the project root, or just `chirpy` if you
 
 Chirpy supports a variety of http endpoints.  By default, the port is set to `:8080`.  This can be changed by altering the `port` variable in `main.go`
 
+Most of the endpoints will require JSON data in the http request.
+
 #### /app/
 
 Fileserver endpoint.  Shows a simple Welcome page in the browser (index.html).  Currently this serves the entire root directory of the project, which is probably not a good idea.  This does, however, give access to the assets directory as well, so you can serve files from there.  I may change the directory this serves in the future so data is safer.
@@ -167,3 +171,118 @@ This effectively resets the database.  As you can imagine, you should use this w
 
 It also resets the hit counter from the previous endpoint.
 
+#### "POST /api/users"
+
+Creates a user in the database.
+
+JSON data expected:
+```json
+{
+    "email": "email@example.com",
+    "password": "<yourpassword>"
+}
+```
+
+As stated earlier, this is a toy application and does not send data securely (yet!).  Transmit passwords with caution.
+
+The response will contain JSON data with user data:
+
+```json
+{
+    "id": "user_id_in_UUID_format",
+    "created_at": "time_user_was_created_at",
+    "updated_at": "time_user_was_updated_at",
+    "email": "email@example.com",
+    "is_chirpy_red": false
+}
+```
+
+`is_chirpy_red` will be false for new users created this way.
+
+#### "PUT /api/users"
+
+Updates a user's email and password.  Requires a user's access token (more on this later) transmitted in the http requests' Authorization header:
+`Authorization: Bearer <token>`
+
+The request needs to have the same JSON format as the previous endpoint.  The response, likewise, will be of the same structure as above.
+
+#### "POST /api/login"
+
+Generates two tokens for the user to be used for interacting with certain endpoints.
+
+The http request must again contain the email and password in JSON like previous endpoints.
+
+The response JSON is slightly different:
+```json
+    "id": "user_id_in_UUID_format",
+    "created_at": "time_user_was_created_at",
+    "updated_at": "time_user_was_updated_at",
+    "email": "email@example.com",
+    "is_chirpy_red": false,
+    "token": "<accessToken>",
+    "refresh_token": "<refreshToken>"
+```
+
+`token` is the users' access token.  This token expires 1 hour after generation, and is used several endpoints.
+
+`refresh_token` expires 60 days after issue.  This token is used to generate a new access token.  This token can also be revoked.
+
+#### "POST /api/refresh"
+
+Generates a new access token for the user.
+
+The http request must contain an Authorization header starting with a Bearer field with the refresh token:
+
+`Authorization: Bearer <refreshToken>`
+
+If the token is valid and has not expired or been revoked, a new authorization token will be generated and returned in the response as JSON data:
+
+```json
+{
+    "token": "<authorizationToken>"
+}
+```
+
+#### "POST /api/revoke"
+
+Revokes a refresh token.  Like the previous endpoint, the request requires an authorization header in the same format:
+
+`Authoriztion: Bearer <refreshToken>`
+
+Response will have a status code of 204 if the revokation was successful.  Any other status code indicates something went wrong.
+
+#### "POST /api/chirps"
+
+Creates a new post (Chirp) in the database.
+
+Request requires an Authorization header:
+`Authorization: Bearer <authorizationToken>`
+
+As well as JSON data:
+```json
+{
+    "body": "message_body_with_less_than_140_characters"
+}
+```
+
+If the message is longer than 140 characters, the response will have a status code of `400` and JSON data:
+```json
+{
+    "error": "Chirp is too long"
+}
+```
+
+If there is an issue with the authorization token, such as a missing or invalid token, the response will have status code `401`.
+
+Otherwise, the response will contain JSON data in the following format:
+```json
+{
+    "body": "message_body",
+    "id": "chirp_id_in_UUID_format",
+    "created_at": "chirp_creation_time"
+    "updated_at": "chirp_update_time"
+    "user_id": "user_id_in_uuid_format"
+}
+```
+
+Response status code will be `201` on success.

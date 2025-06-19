@@ -544,6 +544,8 @@ func (cfg *apiConfig) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	err = cfg.dbQueries.RevokeRefreshToken(r.Context(), refreshToken)
 	if err != nil {
 		log.Printf("Error revoking refresh token in database: %s", err)
+		w.WriteHeader(500)
+		return
 	}
 	w.WriteHeader(204)
 	return
